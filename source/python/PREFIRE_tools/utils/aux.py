@@ -1,7 +1,7 @@
 import numpy as np
 import netCDF4 as n
 import pyproj
-import pygeos
+import shapely
 import datetime
 
 from PREFIRE_PRD_GEN.file_read import get_PREFIRE_Lx_field
@@ -44,7 +44,7 @@ def construct_tirs_geo(tirs_fpath, artp, polygons=True):
         Latitude of each FOV's centroid [deg_N]
     tirs_polylist : list, optional
         Polygon outline(s) for each TIRS FOV. Each list item is a list of
-        pygeos polygons that has length 2 if the TIRS polygon crosses the
+        shapely polygons that has length 2 if the TIRS polygon crosses the
         antimeridian.
     """
     
@@ -87,7 +87,7 @@ def construct_tirs_geo(tirs_fpath, artp, polygons=True):
                     )                
                 split_polys_pts = poly_antimeridian_split(poly_pts_unsplit)
                 for poly_pts in split_polys_pts:
-                    split_polys.append(pygeos.polygons(poly_pts))
+                    split_polys.append(shapely.polygons(poly_pts))
                 
                 # Raise exception if TIRS scene split into more than 2 polygons.
                 # This would indicate a bug in poly_antimeridian_split.
@@ -98,7 +98,7 @@ def construct_tirs_geo(tirs_fpath, artp, polygons=True):
                     
                 tirs_polylist.append(split_polys)
             else:
-                poly = pygeos.polygons(
+                poly = shapely.polygons(
                     [[lon,lat] for lon,lat in zip(vlons_closed, vlats_closed)]
                     )                
                 tirs_polylist.append([poly])
@@ -526,14 +526,23 @@ def TIRS_L1B_time_array_to_dt(TIRS_time_array):
         TIRS observation time as python datetime.
 
     """
-    TIRS_dt = datetime.datetime(
-        int(TIRS_time_array[0]),
-        int(TIRS_time_array[1]),
-        int(TIRS_time_array[2]),
-        int(TIRS_time_array[3]),
-        int(TIRS_time_array[4]),
-        int(TIRS_time_array[5]),
-        int(TIRS_time_array[6])
-        )
-    
-    return TIRS_dt
+
+    # UTC_parts provides the fractional second in milliseconds, but datetime
+    # requires it in microseconds
+    if len(str(TIRS_time_array[6])) == 4:
+        micro_s = int(str(TIRS_time_array[6])+'00')
+    else:
+        micro_s = int(str(TIRS_time_array[6]).zfill(3)+'000')
+
+    t = datetime.datetime(
+        TIRS_time_array[0],
+        TIRS_time_array[1],
+        TIRS_time_array[2],
+        TIRS_time_array[3],
+        TIRS_time_array[4],
+        TIRS_time_array[5],
+        micro_s
+    )
+
+    return t
+

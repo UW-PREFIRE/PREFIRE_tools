@@ -36,16 +36,22 @@ def replace_NaN_or_Inf(obj, fill_value=None, warn_with_moniker=None):
 
     tmp_o = copy.deepcopy(obj)
     try:
-        try:  # Some sort of numpy array?
+        try:  # Some sort of NumPy array?
             if isinstance(tmp_o, np.ma.core.MaskedArray):
                 np.ma.masked_invalid(tmp_o)
             elif fill_value is not None:
                 tmp_o[~np.isfinite(tmp_o)] = fill_value
+            elif fill_value is None:
+                tmp_o.any()  # Only tests if this is a Numpy array
             else:
                 raise ValueError
         except:   # Scalar obj?
             if fill_value is not None:
-                tmp_o = fill_value
+                b_arr = ~np.isfinite([tmp_o])
+                if b_arr:
+                    tmp_o = fill_value
+            elif fill_value is None:
+                pass  # No action needed
             else:
                 raise ValueError
     except:

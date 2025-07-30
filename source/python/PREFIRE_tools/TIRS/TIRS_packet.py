@@ -20,7 +20,7 @@ import numpy as np
   # Custom utilities:
 import PREFIRE_tools.utils.unit_conv as uc
 import PREFIRE_tools.utils.CCSDS_packet_header as Cph
-from PREFIRE_tools.utils.time import ctimeN_to_ctime
+from PREFIRE_tools.utils.time import ctimeN_to_ctime, ctime_to_UTC_DT
 
   # offset DN, copied from (PREFIRE_L1)prefire_TIRS.m
 _TIRS_offset_DN = 24000
@@ -51,14 +51,22 @@ space_enc_pos_range = [(4864-4, 4864+4), (4869-4, 4869+4)]
 caltgt_enc_pos_range = [(3960-4, 3960+4), (3962-4, 3962+4)]
 obstgt_enc_pos_range = [(3146-4, 3146+4), (3148-4, 3148+4)]
 
-# (0)nominal obstgt, (1)possible obstgt, (10)nominal caltgt,
-# (11)possible caltgt, (20)nominal space, (21)possible space,
+# (0)nominal obstgt, (1)possible obstgt,
+# (10)nominal caltgt (cal-sequence), (11)possible caltgt,
+#     (12)nominal caltgt (non-cal-sequence),
+#     (13)possible caltgt (payload-on-but-safed),
+# (20)nominal space (cal-sequence), (21)possible space,
+#     (22)nominal space (non-cal-sequence),
 # (30)skew based on encoder only, (31)skew based on block frame count 1,
-# (32)skew based on block frame count 2, (33)skew based on encoder + ROIC DN,
-# (34)skew assumed via disposition
-OBSTGT_NOM, OBSTGT_POSS, CALTGT_NOM, CALTGT_POSS, SPACE_NOM, SPACE_POSS, \
+#     (32)skew based on block frame count 2,
+#     (33)skew based on encoder + ROIC DN, (34)skew assumed via disposition,
+# (40)hard stop (motor power off), (41)hard stop (motor power-level sentinel),
+#     (42)space aperture short scan, (43)power-on artifacts
+OBSTGT_NOM, OBSTGT_POSS, CALTGT_NOM, CALTGT_POSS, CALTGT_NOM_NCS, \
+    CALTGT_POSS_POBS, SPACE_NOM, SPACE_POSS, SPACE_NOM_NCS, \
     SKEW_VIA_ENCODER, SKEW_VIA_BLKCNT1, SKEW_VIA_BLKCNT2, SKEW_VIA_DN, \
-    SKEW_VIA_DISP = (0, 1, 10, 11, 20, 21, 30, 31, 32, 33, 34)
+    SKEW_VIA_DISP, HS_MPOFF, HS_MPLS, SASS, PON_ARTIFACTS = (
+          0, 1, 10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 33, 34, 40, 41, 42, 43)
 
 N_XTRACK = 8  # Number of cross-orbital-track scenes
 N_SPECTRAL = 64  # Number of spectral channels per scene
@@ -198,7 +206,7 @@ def srd_to_sci_DN(srd_DN):
     for i,j in np.ndindex((nscene, nspectral)):
         k = N_XTRACK*j+i
         o = _TIRS_offset_DN * 2 * ((j+1) % 2)
-        srd_tmp[j,i,:] = (-1)**(j+1) * srd_DN[:,k] + o
+        srd_tmp[j,i,:] = (-1)**(j+1) * srd_DN[:,k].astype("int32") + o
 
     sci_DN = np.zeros((nspectral, nscene, nframe), dtype="int32")
 
@@ -265,6 +273,7 @@ def read_one_scipkt(in_f, bytesize_of_CCSDS_hdr, psp_buffinfo, nonscipkt_log,
         else:
             #== This is a sci packet, but need to check the CRCs:
             sci_buffer = in_f.read(remaining_packet_bytes)
+
             if check_CRCs:
                 fullpkt_buffer = CCSDS_header_buffer+sci_buffer
 
@@ -294,7 +303,20 @@ def read_one_scipkt(in_f, bytesize_of_CCSDS_hdr, psp_buffinfo, nonscipkt_log,
 
                 if any([top_CRC_check_failed, ROIC_CRC_check_failed,
                         ENG_CRC_check_failed]):
-                    print("sci packet failed CRC checks")
+                    ib, ie, _ = psp_buffinfo["Timestamp_Sec_Since_Epoch"]
+                    ctimeN_ms = float(int.from_bytes(sci_buffer[ib:ie], "big",
+                                                  signed=False)*uc.int_s_to_ms)
+                    ctime_s = ctimeN_to_ctime(ctimeN_ms*uc.ms_to_s, 's',
+                                              leap_s_info)  # [s]
+                    UTC_DT, _ = ctime_to_UTC_DT(ctime_s, 's', leap_s_info)
+                    if UTC_DT.year < 2024 or UTC_DT.year > 2030:
+                        t_info = f"improper UTC: {UTC_DT}"
+                    else:
+                        t_info = f"UTC: {UTC_DT}"
+                    print("sci packet failed CRC checks (top: {}, ROIC: {}, "
+                          "ENG: {}, {})".format(top_CRC_check_failed,
+                          ROIC_CRC_check_failed, ENG_CRC_check_failed, t_info))
+
                     info = [APID, in_f.tell()-bytesize_of_CCSDS_hdr,
                             remaining_packet_bytes+bytesize_of_CCSDS_hdr]
                     sm_bytes_traversed = Cph.seek_CCSDS_sync_marker(in_f)

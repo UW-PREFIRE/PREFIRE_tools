@@ -14,7 +14,7 @@ There is another group of MATLAB code from D. Vallado here:
 https://celestrak.com/software/vallado-sw.php
 
 This includes needed TEME to ECI/ECEF transformations.  The additional relevant
-files (teme2eci.m, teme2ecef.m, gstime.m, polarm.m, precess.m, notation.m, 
+files (teme2eci.m, teme2ecef.m, gstime.m, polarm.m, precess.m, notation.m,
 fundarg.m) were copied (March 2021) from this different resource into this
 directory.
 
