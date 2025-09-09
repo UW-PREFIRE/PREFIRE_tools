@@ -6,5 +6,5 @@ This is not a standalone PREFIRE data processing algorithm, and will not be arch
 
 This repository currently contains Python and MATLAB code, and is released under the terms of this [LICENSE](LICENSE).
 
-_The creation of much of this code was supported by NASA, as part of the PREFIRE (Polar Radiant Energy in the Far-InfraRed Experiment) CubeSat mission._
+### _The creation of much of this code was supported by NASA, as part of the PREFIRE (Polar Radiant Energy in the Far-InfraRed Experiment) CubeSat mission._
 
